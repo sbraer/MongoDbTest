@@ -123,7 +123,7 @@ services:
         constraints: [engine.labels.web==true]
 
   webapp:
-    image: sbraer/mongodbtest::v1
+    image: sbraer/mongodbtest:v1
     ports:
       - 5000:5000
     environment:
