@@ -1,0 +1,685 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  This template deploys a VPC, with a pair of public and private subnets spread across
+  two Availability Zones. It deploys an Internet Gateway, with a default route on
+  the public subnets. It deploys a pair of NAT Gateways (one in each AZ), and default
+  routes for them in the private subnets.
+Mappings:
+  RegionMap:
+    ap-northeast-1:
+      AMI: ami-0d7ed3ddb85b521a6
+    ap-northeast-2:
+      AMI: ami-018a9a930060d38aa
+    ap-south-1:
+      AMI: ami-0937dcc711d38ef3f
+    ap-southeast-1:
+      AMI: ami-04677bdaa3c2b6e24
+    ap-southeast-2:
+      AMI: ami-0c9d48b5db609ad6e
+    ca-central-1:
+      AMI: ami-0de8b8e4bc1f125fe
+    eu-central-1:
+      AMI: ami-0eaec5838478eb0ba
+    eu-north-1:
+      AMI: ami-6d27a913
+    eu-west-1:
+      AMI: ami-0fad7378adf284ce0
+    eu-west-2:
+      AMI: ami-0664a710233d7c148
+    eu-west-3:
+      AMI: ami-0854d53ce963f69d8
+    sa-east-1:
+      AMI: ami-0b04450959586da29
+    us-east-1:
+      AMI: ami-035be7bafff33b6b6
+    us-east-2:
+      AMI: ami-04328208f4f0cf1fe
+    us-west-1:
+      AMI: ami-0799ad445b5727125
+    us-west-2:
+      AMI: ami-032509850cf9ee54e
+Outputs:
+  PublicIPMasterA:
+    Description: 'Public IP address of the newly created EC2 instance: MasterA'
+    Value: !GetAtt 'MasterA.PublicIp'
+  PublicIPMongo1:
+    Description: 'Public IP address of the newly created EC2 instance: Mongo1'
+    Value: !GetAtt 'Mongo1.PublicIp'
+  PublicIPMongo2:
+    Description: 'Public IP address of the newly created EC2 instance: Mongo2'
+    Value: !GetAtt 'Mongo2.PublicIp'
+  PublicIPMongo3:
+    Description: 'Public IP address of the newly created EC2 instance: Mongo3'
+    Value: !GetAtt 'Mongo3.PublicIp'
+  Subnet1:
+    Description: A reference to the public subnet in the availability Zone
+    Value: !Ref 'Subnet1'
+  Subnet2:
+    Description: A reference to the public subnet in the availability Zone
+    Value: !Ref 'Subnet2'
+  Subnet3:
+    Description: A reference to the public subnet in the availability Zone
+    Value: !Ref 'Subnet3'
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref 'VPC'
+Parameters:
+  KeyPairName:
+    Description: Key used with SSH
+    Type: AWS::EC2::KeyPair::KeyName
+Resources:
+  AlarmRecoveryMasterA:
+    Properties:
+      AlarmActions:
+        - !Sub 'arn:aws:automate:${AWS::Region}:ec2:recover'
+      AlarmDescription: Recovery MasterA
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref 'MasterA'
+      EvaluationPeriods: '5'
+      MetricName: StatusCheckFailed_System
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Maximum
+      Threshold: '0'
+    Type: AWS::CloudWatch::Alarm
+  AlarmRecoveryMongo1:
+    Properties:
+      AlarmActions:
+        - !Sub 'arn:aws:automate:${AWS::Region}:ec2:recover'
+      AlarmDescription: Recovery Mongo1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref 'Mongo1'
+      EvaluationPeriods: '5'
+      MetricName: StatusCheckFailed_System
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Maximum
+      Threshold: '0'
+    Type: AWS::CloudWatch::Alarm
+  AlarmRecoveryMongo2:
+    Properties:
+      AlarmActions:
+        - !Sub 'arn:aws:automate:${AWS::Region}:ec2:recover'
+      AlarmDescription: Recovery Mongo2
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref 'Mongo2'
+      EvaluationPeriods: '5'
+      MetricName: StatusCheckFailed_System
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Maximum
+      Threshold: '0'
+    Type: AWS::CloudWatch::Alarm
+  AlarmRecoveryMongo3:
+    Properties:
+      AlarmActions:
+        - !Sub 'arn:aws:automate:${AWS::Region}:ec2:recover'
+      AlarmDescription: Recovery Mongo3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref 'Mongo3'
+      EvaluationPeriods: '5'
+      MetricName: StatusCheckFailed_System
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Maximum
+      Threshold: '0'
+    Type: AWS::CloudWatch::Alarm
+  AttachGateway:
+    Properties:
+      InternetGatewayId: !Ref 'InternetGateway'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::VPCGatewayAttachment
+  AutoscalingGroupweb:
+    Properties:
+      Cooldown: 300
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 300
+      HealthCheckType: EC2
+      LaunchConfigurationName: !Ref 'LaunchConfigurationweb'
+      MaxSize: 3
+      MinSize: 1
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: MyEnvironment-AutoscalingGroupweb
+      VPCZoneIdentifier:
+        - !Ref 'Subnet1'
+        - !Ref 'Subnet2'
+        - !Ref 'Subnet3'
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+      AutoScalingRollingUpdate:
+        MaxBatchSize: '1'
+        MinInstancesInService: '1'
+        PauseTime: PT5M
+        WaitOnResourceSignals: 'true'
+  HTTPRequestAlarmDownweb:
+    Properties:
+      AlarmActions:
+        - !Ref 'HTTPRequestScalingPolicyDownweb'
+      AlarmDescription: Alarm if Network is < 1.000.000
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoscalingGroupweb'
+      EvaluationPeriods: '1'
+      MetricName: NetworkOut
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold: '1000000'
+    Type: AWS::CloudWatch::Alarm
+  HTTPRequestAlarmUpweb:
+    Properties:
+      AlarmActions:
+        - !Ref 'HTTPRequestScalingPolicyUpweb'
+      AlarmDescription: Alarm if Network out is > 4.000.000
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AutoscalingGroupweb'
+      EvaluationPeriods: '1'
+      MetricName: NetworkOut
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold: '4000000'
+    Type: AWS::CloudWatch::Alarm
+  HTTPRequestScalingPolicyDownweb:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoscalingGroupweb'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+    Type: AWS::AutoScaling::ScalingPolicy
+  HTTPRequestScalingPolicyUpweb:
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AutoscalingGroupweb'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+    Type: AWS::AutoScaling::ScalingPolicy
+  InternetGateway:
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Internet-Gateway
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+    Type: AWS::EC2::InternetGateway
+  LaunchConfigurationweb:
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: '8'
+      IamInstanceProfile: !Ref 'RootInstanceProfile'
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: t2.micro
+      KeyName: !Ref 'KeyPairName'
+      SecurityGroups:
+        - !Ref 'MyEnvironmentCustomSecurityGroupIngressWorker'
+      UserData: !Base64 "#!/bin/bash\nyum update --security -y\namazon-linux-extras\
+        \ install docker=18.09.9 -y\nsed -i '/ExecStart=\\/usr\\/bin\\/dockerd /cExecStart=\\\
+        /usr\\/bin\\/dockerd -H fd:// --label web=true'  /lib/systemd/system/docker.service\n\
+        service docker start\nsystemctl daemon-reload\nsleep 5\nservice docker restart\n\
+        systemctl enable docker\n\nAwsRegion=$(curl -s 169.254.169.254/latest/meta-data/placement/availability-zone\
+        \ | sed 's/.$//')\nDockerVersion=$(docker version --format '{{.Server.Version}}')\n\
+        yum install -y git\n# Use this command if you only want to support EBS\ndocker\
+        \ plugin install --alias cloudstor:aws --grant-all-permissions docker4x/cloudstor:18.09.2-ce-aws1\
+        \ CLOUD_PLATFORM=AWS AWS_REGION=${AwsRegion} EFS_SUPPORTED=0 DEBUG=0\n\n#git\
+        \ config --system credential.helper '!aws codecommit credential-helper $@'\n\
+        #git config --system credential.UseHttpPath true\nmkdir /scripts\ncd /scripts\n\
+        git clone https://github.com/sbraer/AwsNodeJsCodeDeploy.git\ncd AwsNodeJsCodeDeploy/\n\
+        chmod +x join_to_swarm.sh\n./join_to_swarm.sh 192.168.0.250\n"
+    Type: AWS::AutoScaling::LaunchConfiguration
+  MasterA:
+    Properties:
+      DisableApiTermination: 'false'
+      IamInstanceProfile: !Ref 'RootInstanceProfile'
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: t2.micro
+      KeyName: !Ref 'KeyPairName'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeleteOnTermination: 'true'
+          Description: Primary network interface
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref 'MyEnvironmentCustomSecurityGroupIngressMaster'
+          PrivateIpAddresses:
+            - Primary: 'true'
+              PrivateIpAddress: 192.168.0.250
+          SubnetId: !Ref 'Subnet1'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-MasterA
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      UserData: !Base64 "Content-Type: multipart/mixed; boundary=\"//\"\nMIME-Version:\
+        \ 1.0\n\n--//\nContent-Type: text/cloud-config; charset=\"us-ascii\"\nMIME-Version:\
+        \ 1.0\nContent-Transfer-Encoding: 7bit\nContent-Disposition: attachment; filename=\"\
+        cloud-config.txt\"\n\n#cloud-config\ncloud_final_modules:\n- [scripts-user,\
+        \ always]\n\n--//\nContent-Type: text/x-shellscript; charset=\"us-ascii\"\n\
+        MIME-Version: 1.0\nContent-Transfer-Encoding: 7bit\nContent-Disposition: attachment;\
+        \ filename=\"userdata.txt\"\n\n#!/bin/bash\namazon-linux-extras install epel\n\
+        yum update --security -y\nyum install --enablerepo=epel -y nodejs\n\namazon-linux-extras\
+        \ install docker=18.09.9 -y\nservice docker start\nsystemctl enable docker\n\
+        \nAwsRegion=$(curl -s 169.254.169.254/latest/meta-data/placement/availability-zone\
+        \ | sed 's/.$//')\nDockerVersion=$(docker version --format '{{.Server.Version}}')\n\
+        yum install -y git awslogs\nsed -i -e \"s/us-east-1/$AwsRegion/g\" /etc/awslogs/awscli.conf\n\
+        sed -i -e 's/log_group_name = \\/var\\/log\\/messages/log_group_name = Stack2/g'\
+        \ /etc/awslogs/awslogs.conf\nsed -i -e 's/log_stream_name = {instance_id}/log_stream_name\
+        \ = messages-stack/g' /etc/awslogs/awslogs.conf\nsed -i -e 's/\\/var\\/log\\\
+        /messages/\\/var\\/log\\/messages-stack/g' /etc/awslogs/awslogs.conf\nsystemctl\
+        \ start awslogsd\nsystemctl enable awslogsd.service\necho 'Start service in\
+        \ MasterA' > /var/log/messages-stack\n#git config --system credential.helper\
+        \ '!aws codecommit credential-helper $@'\n#git config --system credential.UseHttpPath\
+        \ true\n\n# Use this command if you only want to support EBS\ndocker plugin\
+        \ install --alias cloudstor:aws --grant-all-permissions docker4x/cloudstor:18.09.2-ce-aws1\
+        \ CLOUD_PLATFORM=AWS AWS_REGION=${AwsRegion} EFS_SUPPORTED=0 DEBUG=0\n\nrm\
+        \ -rf /scripts\nmkdir /scripts\ncd /scripts\ngit clone https://github.com/sbraer/AwsNodeJsCodeDeploy.git\n\
+        cd AwsNodeJsCodeDeploy/\nnpm install\nchmod +x create_swarm.sh\nchmod +x update_service.sh\n\
+        crontab -r\nchmod +x docker_login.sh\n./docker_login.sh\n(crontab -l 2>/dev/null;\
+        \ echo \"0 */6 * * * /scripts/AwsNodeJsCodeDeploy/docker_login.sh -with args\"\
+        ) | crontab -\n./create_swarm.sh 192.168.0.250\n--//"
+    Type: AWS::EC2::Instance
+  Mongo1:
+    Properties:
+      DisableApiTermination: 'false'
+      IamInstanceProfile: !Ref 'RootInstanceProfile'
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: t2.micro
+      KeyName: !Ref 'KeyPairName'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeleteOnTermination: 'true'
+          Description: Primary network interface
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref 'MyEnvironmentCustomSecurityGroupIngressDb'
+          PrivateIpAddresses:
+            - Primary: 'true'
+              PrivateIpAddress: 192.168.0.249
+          SubnetId: !Ref 'Subnet1'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Mongo1
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      UserData: !Base64 "#!/bin/bash\nyum update --security -y\namazon-linux-extras\
+        \ install docker=18.09.9 -y\nsed -i '/ExecStart=\\/usr\\/bin\\/dockerd /cExecStart=\\\
+        /usr\\/bin\\/dockerd -H fd:// --label mongo1=true'  /lib/systemd/system/docker.service\n\
+        service docker start\nsystemctl daemon-reload\nsleep 5\nservice docker restart\n\
+        systemctl enable docker\n\nAwsRegion=$(curl -s 169.254.169.254/latest/meta-data/placement/availability-zone\
+        \ | sed 's/.$//')\nDockerVersion=$(docker version --format '{{.Server.Version}}')\n\
+        yum install -y git\n# Use this command if you only want to support EBS\ndocker\
+        \ plugin install --alias cloudstor:aws --grant-all-permissions docker4x/cloudstor:18.09.2-ce-aws1\
+        \ CLOUD_PLATFORM=AWS AWS_REGION=${AwsRegion} EFS_SUPPORTED=0 DEBUG=0\n\n#git\
+        \ config --system credential.helper '!aws codecommit credential-helper $@'\n\
+        #git config --system credential.UseHttpPath true\nmkdir /scripts\ncd /scripts\n\
+        git clone https://github.com/sbraer/AwsNodeJsCodeDeploy.git\ncd AwsNodeJsCodeDeploy/\n\
+        chmod +x join_to_swarm.sh\n./join_to_swarm.sh 192.168.0.250\n"
+    Type: AWS::EC2::Instance
+  Mongo2:
+    Properties:
+      DisableApiTermination: 'false'
+      IamInstanceProfile: !Ref 'RootInstanceProfile'
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: t2.micro
+      KeyName: !Ref 'KeyPairName'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeleteOnTermination: 'true'
+          Description: Primary network interface
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref 'MyEnvironmentCustomSecurityGroupIngressDb'
+          PrivateIpAddresses:
+            - Primary: 'true'
+              PrivateIpAddress: 192.168.16.249
+          SubnetId: !Ref 'Subnet2'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Mongo2
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      UserData: !Base64 "#!/bin/bash\nyum update --security -y\namazon-linux-extras\
+        \ install docker=18.09.9 -y\nsed -i '/ExecStart=\\/usr\\/bin\\/dockerd /cExecStart=\\\
+        /usr\\/bin\\/dockerd -H fd:// --label mongo2=true'  /lib/systemd/system/docker.service\n\
+        service docker start\nsystemctl daemon-reload\nsleep 5\nservice docker restart\n\
+        systemctl enable docker\n\nAwsRegion=$(curl -s 169.254.169.254/latest/meta-data/placement/availability-zone\
+        \ | sed 's/.$//')\nDockerVersion=$(docker version --format '{{.Server.Version}}')\n\
+        yum install -y git\n# Use this command if you only want to support EBS\ndocker\
+        \ plugin install --alias cloudstor:aws --grant-all-permissions docker4x/cloudstor:18.09.2-ce-aws1\
+        \ CLOUD_PLATFORM=AWS AWS_REGION=${AwsRegion} EFS_SUPPORTED=0 DEBUG=0\n\n#git\
+        \ config --system credential.helper '!aws codecommit credential-helper $@'\n\
+        #git config --system credential.UseHttpPath true\nmkdir /scripts\ncd /scripts\n\
+        git clone https://github.com/sbraer/AwsNodeJsCodeDeploy.git\ncd AwsNodeJsCodeDeploy/\n\
+        chmod +x join_to_swarm.sh\n./join_to_swarm.sh 192.168.0.250\n"
+    Type: AWS::EC2::Instance
+  Mongo3:
+    Properties:
+      DisableApiTermination: 'false'
+      IamInstanceProfile: !Ref 'RootInstanceProfile'
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: t2.micro
+      KeyName: !Ref 'KeyPairName'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeleteOnTermination: 'true'
+          Description: Primary network interface
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref 'MyEnvironmentCustomSecurityGroupIngressDb'
+          PrivateIpAddresses:
+            - Primary: 'true'
+              PrivateIpAddress: 192.168.32.249
+          SubnetId: !Ref 'Subnet3'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Mongo3
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      UserData: !Base64 "#!/bin/bash\nyum update --security -y\namazon-linux-extras\
+        \ install docker=18.09.9 -y\nsed -i '/ExecStart=\\/usr\\/bin\\/dockerd /cExecStart=\\\
+        /usr\\/bin\\/dockerd -H fd:// --label mongo3=true'  /lib/systemd/system/docker.service\n\
+        service docker start\nsystemctl daemon-reload\nsleep 5\nservice docker restart\n\
+        systemctl enable docker\n\nAwsRegion=$(curl -s 169.254.169.254/latest/meta-data/placement/availability-zone\
+        \ | sed 's/.$//')\nDockerVersion=$(docker version --format '{{.Server.Version}}')\n\
+        yum install -y git\n# Use this command if you only want to support EBS\ndocker\
+        \ plugin install --alias cloudstor:aws --grant-all-permissions docker4x/cloudstor:18.09.2-ce-aws1\
+        \ CLOUD_PLATFORM=AWS AWS_REGION=${AwsRegion} EFS_SUPPORTED=0 DEBUG=0\n\n#git\
+        \ config --system credential.helper '!aws codecommit credential-helper $@'\n\
+        #git config --system credential.UseHttpPath true\nmkdir /scripts\ncd /scripts\n\
+        git clone https://github.com/sbraer/AwsNodeJsCodeDeploy.git\ncd AwsNodeJsCodeDeploy/\n\
+        chmod +x join_to_swarm.sh\n./join_to_swarm.sh 192.168.0.250\n"
+    Type: AWS::EC2::Instance
+  MyEnvironmentCustomSecurityGroupIngressDb:
+    Properties:
+      GroupDescription: CustomSecurity Group Ingress Db
+      SecurityGroupEgress:
+        - CidrIp: '0.0.0.0/0'
+          FromPort: -1
+          IpProtocol: '-1'
+          ToPort: -1
+      SecurityGroupIngress:
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: tcp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: udp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 4789
+          IpProtocol: udp
+          ToPort: 4789
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 192.168.0.0/16
+          FromPort: 27017
+          IpProtocol: tcp
+          ToPort: 27017
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-CustomSecurityGroupIngressDb
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::SecurityGroup
+  MyEnvironmentCustomSecurityGroupIngressMaster:
+    Properties:
+      GroupDescription: CustomSecurity Group Ingress Master
+      SecurityGroupEgress:
+        - CidrIp: '0.0.0.0/0'
+          FromPort: -1
+          IpProtocol: '-1'
+          ToPort: -1
+      SecurityGroupIngress:
+        - CidrIp: 192.168.0.0/16
+          FromPort: 2376
+          IpProtocol: tcp
+          ToPort: 2377
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: tcp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: udp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 4789
+          IpProtocol: udp
+          ToPort: 4789
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 192.168.0.0/16
+          FromPort: 64000
+          IpProtocol: tcp
+          ToPort: 64000
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-CustomSecurityGroupIngressMaster
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::SecurityGroup
+  MyEnvironmentCustomSecurityGroupIngressWorker:
+    Properties:
+      GroupDescription: CustomSecurity Group Ingress Master
+      SecurityGroupEgress:
+        - CidrIp: '0.0.0.0/0'
+          FromPort: -1
+          IpProtocol: '-1'
+          ToPort: -1
+      SecurityGroupIngress:
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: tcp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 7946
+          IpProtocol: udp
+          ToPort: 7946
+        - CidrIp: 192.168.0.0/16
+          FromPort: 4789
+          IpProtocol: udp
+          ToPort: 4789
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 5000
+          IpProtocol: tcp
+          ToPort: 5002
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-CustomSecurityGroupIngressWorker
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::SecurityGroup
+  PublicRouteTable:
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Public-Routes
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::RouteTable
+  RootInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'RootRole'
+    Type: AWS::IAM::InstanceProfile
+  RootRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codecommit:ListRepositories
+                Effect: Allow
+                Resource:
+                  - '*'
+              - Action:
+                  - codecommit:GitPull
+                Effect: Allow
+                Resource:
+                  - arn:aws:codecommit:eu-central-1:838080890745:AwsCodeTest
+          PolicyName: MyEnvironment-GitPolicy
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Effect: Allow
+                Resource:
+                  - arn:aws:logs:*:*:*
+          PolicyName: MyEnvironment-CWMyLogPolicy
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ec2:CreateTags
+                  - ec2:AttachVolume
+                  - ec2:DetachVolume
+                  - ec2:CreateVolume
+                  - ec2:DeleteVolume
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeVolumeStatus
+                  - ec2:CreateSnapshot
+                  - ec2:DeleteSnapshot
+                  - ec2:DescribeSnapshots
+                Effect: Allow
+                Resource:
+                  - '*'
+          PolicyName: MyEnvironment-CloudStor
+    Type: AWS::IAM::Role
+  Route:
+    DependsOn: AttachGateway
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+      RouteTableId: !Ref 'PublicRouteTable'
+    Type: AWS::EC2::Route
+  Subnet1:
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 192.168.0.0/20
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Subnet1
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::Subnet
+  Subnet2:
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: 192.168.16.0/20
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Subnet2
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::Subnet
+  Subnet3:
+    Properties:
+      AvailabilityZone: !Select
+        - 2
+        - !GetAZs ''
+      CidrBlock: 192.168.32.0/20
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-Subnet3
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+      VpcId: !Ref 'VPC'
+    Type: AWS::EC2::Subnet
+  SubnetRouteTableAssociationSubnet1:
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      SubnetId: !Ref 'Subnet1'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  SubnetRouteTableAssociationSubnet2:
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      SubnetId: !Ref 'Subnet2'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  SubnetRouteTableAssociationSubnet3:
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      SubnetId: !Ref 'Subnet3'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  VPC:
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      Tags:
+        - Key: Name
+          Value: MyEnvironment-VPC
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+    Type: AWS::EC2::VPC

@@ -1,0 +1,151 @@
+version: '3.7'
+
+services:
+  mongo1:
+    image: mongo:4.2.1
+    command: mongod --replSet replicaTest --port 27017 --keyFile /run/secrets/MONGO_DB_KEYFILE
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+      - source: MONGO_DB_KEYFILE
+        uid: '999'
+        gid: '999'
+        mode: 0600
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [engine.labels.mongo1==true]
+
+  mongo2:
+    image: mongo:4.2.1
+    command: mongod --replSet replicaTest --port 27017 --keyFile /run/secrets/MONGO_DB_KEYFILE
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+      - source: MONGO_DB_KEYFILE
+        uid: '999'
+        gid: '999'
+        mode: 0600
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [engine.labels.mongo2==true]
+
+  mongo3:
+    image: mongo:4.2.1
+    command: mongod --replSet replicaTest --port 27017 --keyFile /run/secrets/MONGO_DB_KEYFILE
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+      - source: MONGO_DB_KEYFILE
+        uid: '999'
+        gid: '999'
+        mode: 0600
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [engine.labels.mongo3==true]
+
+  mongoreplicaset:
+    image: sbraer/mongoreplicaset:v1
+    environment:
+      MONGODB_CLUSTER_LIST: mongo1:27017 mongo2:27017 mongo3:27017
+      MONGODB_USERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      MONGODB_PASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+    deploy:
+      restart_policy:
+        condition: none
+      placement:
+        constraints: [engine.labels.mongo1==true]
+
+  mongo-express:
+    image: mkucuk20/mongo-express
+    ports:
+      - 5002:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      ME_CONFIG_MONGODB_ADMINPASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+      ME_CONFIG_MONGODB_SERVER: mongo1,mongo2,mongo3
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+    deploy:
+      placement:
+        constraints: [engine.labels.web==true]
+
+  webapp:
+    image: sbraer/mongodbtest:v1
+    ports:
+      - 5000:5000
+    environment:
+      MONGODB_REPLICA_SET: replicaTest
+      MONGODB_DATABASE_NAME: MyDatabase
+      MONGODB_BOOKS_COLLECTION_NAME: MyTest
+      MONGODB_SERVER_LIST: mongo1,mongo2,mongo3
+      MONGODB_SERVER_USERNAME_FILE: /run/secrets/MONGODB_USERNAME
+      MONGODB_SERVER_PASSWORD_FILE: /run/secrets/MONGODB_PASSWORD
+    networks:
+      - mongo
+    secrets:
+      - MONGODB_USERNAME
+      - MONGODB_PASSWORD
+    deploy:
+      mode: global
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      placement:
+        constraints: [engine.labels.web==true]
+
+  visualizer:
+    image: dockersamples/visualizer
+    ports:
+      - 5001:8080
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+      - visualizer
+
+networks:
+  mongo:
+  visualizer:
+
+secrets:
+  MONGODB_USERNAME:
+    external: true
+  MONGODB_PASSWORD:
+    external: true
+  MONGO_DB_KEYFILE:
+    external: true
