@@ -47,7 +47,7 @@ if [ -z "$password" ]; then
 fi
 
 clusterlength=${#my_array[@]}
-status=$(mongo -u "$username" -p "$password" --host ubuntuservermaster1 --quiet --eval 'rs.status().members.length')
+status=$(mongo -u "$username" -p "$password" --host ${my_array[0]} --quiet --eval 'rs.status().members.length')
 if [ "$status" != "$clusterlength" ]; then
   echo "Creating replica set"
   mongo --host ${my_array[0]} -u "$username" -p "$password" --eval 'rs.initiate()';
