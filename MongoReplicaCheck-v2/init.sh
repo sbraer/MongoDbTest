@@ -53,14 +53,16 @@ fi
 
 clusterlength=${#my_array[@]}
 status=$(mongo -u "$username" -p "$password" --host ${my_array[0]} --quiet --eval 'rs.status().members.length')
+echo "Length: $clusterlength. status: $status"
 if [ "$status" != "$clusterlength" ]; then
   echo "Creating replica set"
-  mongo --host ${my_array[0]} -u "$username" -p "$password" --eval 'rs.initiate({_id: "$replicasetname",version: 1, members: [{ _id: 0, host : "${my_array[0]}" }]})';
+  mongo --host ${my_array[0]} -u "$username" -p "$password" --eval 'rs.initiate({_id: "'$replicasetname'",version: 1, members: [{ _id: 0, host : "'${my_array[0]}'" }]})';
+  echo "Wait 5 seconds..."
   sleep 5
   for r in "${my_array[@]}"
   do
     if [ "$r" != "${my_array[0]}" ]; then
-      echo "add '$r'"
+      echo "add '$r' to ${my_array[0]}"
       mongo --host ${my_array[0]} -u "$username" -p "$password" --eval 'rs.add( { host: "'$r'" })';
     fi
   done
