@@ -22,8 +22,9 @@ namespace MongoDbTest.Controllers
         public IActionResult Get()
         {
             JObject envList = new JObject();
-            Environment.GetEnvironmentVariables().Cast<DictionaryEntry>().ToList()
-				.OrderBy(t=>t.Key.ToString().ToLower()).ToList()
+            Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
+				.OrderBy(t=>t.Key.ToString().ToLower())
+				.ToList()
 				.ForEach(t => envList.Add(new JProperty(t.Key.ToString(), t.Value)));
 
             JObject output =
